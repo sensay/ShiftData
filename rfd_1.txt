@@ -1,0 +1,180 @@
+~---
+authors: Stef Telford <stef@makesense.com>
+state: publish
+---
+
+# RFD 1 ShiftData
+
+## Note on terminology
+  SOURCES specifically refers to 3rd party systems such as EOS or Glass
+  REQUESTOR refers to the user or application requesting data 
+  TARGET refers to the user who specifically checked in their data to EOS or Glass
+
+
+## How does ShiftData Work ?
+
+  a TARGET initially uploads or informs a SOURCE about a skill or some information
+  the SOURCE then publishes onto the relevant blockchains a data attribution packet *[1] *[2]
+  a REQUESTOR calls over to the datashift HTTP API and finds the TARGET's wallet
+    has more detailed information about 'ruby' in SENSE
+  the REQUESTOR then calls the datashift HTTP API 'request-data' by sending in a
+    request packet *[2] along with the payment of 1 SENSE token *[3]
+  datashift takes the request, converts the token into the SOURCE token if needs be,
+    and then passes over to the SOURCES endpoint the request *[4]
+  The SOURCE then takes the request, looks up the data (also taking into account
+    any optional 'command' hints), and responds onto the callback URL.
+
+ 
+  *[1] In the case of Eth or Neo this would be via a contract call, although it could
+       also be via an API endpoint on datashift and let it publish. This then means
+       that the liquidity pool would have to include the TARGET blockchains tokens, of
+       course, and payment would come from the 3rd party. A reverse mapping in essence.
+  
+  *[2] The request packet for getting detailed information should include at a minimum;
+         payment in any SOURCE token (including the blockchains)
+         REQUESTOR id of the user/app
+         SOURCE to forward request onto
+         TARGET id 
+         epochtime in UTC - reduce replay attacks on endpoints (acting as a nonce)
+         callback url
+       Note that this entire request has been encrypted using REQUESTORs private pgp key
+
+  *[3] The SOURCE token cost can be set via the codebase running on elixir/erlang
+       and then hot reloaded. Having this externally configurable could be an 
+       attack vector we wish to avoid.
+
+  *[4] Open for discussion is, should we control where/how the endpoint is located 
+       for SOURCES ? Eg; HTTP or via Contracts only ?
+
+
+## Payment of Source and Target
+
+  ShiftData SOURCES will have to provide some tokens to begin with on joining,
+  to provide a near real-time internal brokerage. If this isn't done, then payments
+  would have to block requests until enough SOURCE tokens became available. This
+  is obviously less than ideal when we are doing data collection/retrieval. It
+  won't solve the delay, but hopefully ameliorate it down to sub-second.
+
+  Conversion rates for tokens will be updated, at least hourly. Since datashift
+  will, ideally, not be holding the most volatile/costly token (bitcoin) then the
+  delta between actual 'to the second' rates and what we have cached shouldn't be
+  too drastic. Of course, this is an assumption about the volatility of 
+  tokens/altcoins obviously. As with other "semi-constants", it would make sense
+  to have the polling time configurable at least on the backend elixir/erlang.
+  
+  Ideally, we should also give a reward back to the TARGET who supplied the data
+  that is requested in the first place. The proposal is that this will be backended
+  from the datashift system itself. 
+
+  This means that any datashift request for more data, the token cost will be 89%
+  passed onto the SOURCE, 10% passed onto the TARGET and 1% will be kept by the 
+  datashift system itself. Again, this should be configurable, and even disabled
+  if requested by a SOURCE. I would view disabling as a moral, if not an ethical,
+  breach of service. One of the ideas of ShiftData is for "everyone to win", not
+  merely the SOURCE of the data, but the TARGET as well.
+  
+  The reason for the 1% is this is to reduce any loss from the delta in rates and
+  our liquidity pool. It would also have a custom threshold for each SOURCE, past
+  which, if we are over the limit, the excess is then sent back to the SOURCE. We
+  do not want to run datashift as a 'for profit', and only hold the bare minimum
+  we need for token swaps.
+
+
+## Data attribution on blockchain ?
+
+  The question can be asked, "why publish any data attribution from a TARGET
+  from a SOURCE onto any blockchain when we have an HTTP API ?" 
+
+  The answer to this is that we don't want to force people to have to go via the
+  datashift API. It could be that someone has a great idea to expand or query or
+  store the pointers to SOURCES in some new way. It could be that later we want
+  to make some dApp which runs datashift on a distributed cloud computing system.
+  In short, we lose nothing and potentially open a lot of 3rd party integrations.
+
+
+## Endpoints 
+ 
+  The HTTP API endpoints are to be assumed to be rate limited, with an exponential
+  drop off on requests. Bulk API's can always be built later if deemed nescessary;
+
+  datahift responds to
+  * /register-publickey - takes a REQUESTOR id and their public key,
+                          provides back an auth token for revoking later
+  * /deregister-publickey - takes a REQUESTOR id and the revoking auth token
+                            once this command is processed, the REQUESTOR id is removed
+                            and can be re-registered with a new publickey
+  * /known-SOURCES - responds with list of known SOURCES (glass, sense, etc)
+  
+  datashift auth commands
+  * /request-data - takes a data packet as per *[2] above but also with an
+                      - optional 'command' parameter. What this does is left upto
+                        each SOURCE to decide. In the case of SENSE, it could be a
+                        'search for ruby devs' for example.
+
+                    The incoming packet is decrypted using the registered public
+                    key and then private encrypted using ShiftDatas key. This new
+                    packet is then sent onto the SOURCE for retrieval.
+
+
+  SOURCES should responed to the following;
+
+  * /alive - internal datashift, should return simply 200 status
+  * /send-data - takes payment in their native token and decrypts
+                 the datapacket using ShiftDatas public key. The
+                 data is then sent back to the callback URL, 
+                 effectively by-passing ShiftData for the return.
+
+## Data Markup
+
+  It is proposed that the data returned from the SOURCES should be in 
+  the micro-format as detailed on schema.org, and using JSON-LD. The
+  reasons for this are many, but ideally, it opens up a level of integration
+  with existing infrastructure with Google, Microsoft, etc. It is also
+  an open community data standard.
+
+  Using a schema'd data format also let's end application validate as
+  well as manipulate if needs be easier. JSON-LD is preferred in the
+  case that the end appliaction is a dApp or some variant (then there
+  is no need for an XML parser etc to be invoked)
+
+  The current release of the data format at this time is 3.3, and I do
+  not see any reason to TARGET an earlier revision.
+
+
+##`Attribution onto blockchain(s)
+
+  Attribution, as stated earlier, is not considered mandatory for
+  a SOURCE. However, it does provide a driving force for any SOURCE
+  to do so. Primary reason is that it allows engagement outside of
+  ShiftData and accessibility for 3rd parties. However, it also 
+  allows certain parts of a system to be engaged; For example, if 
+  SENSE wanted to show 'ruby devs' love, but not 'c# devs', it could
+  publish one but not the other. Obviously this is a strange example,
+  but the extensibility should not be discounted.
+
+  Ideally, any SOURCE should publish onto their own blockchain, but
+  also any other blockchain(s) that ShiftData supports. This is a 
+  good argument for making ShiftData contracts the means for 
+  attribution onto the blockchain(s) but also a potential bottleneck.
+
+  The minimum attributes for attribution would be as follows;
+    TARGET id - ethereum or eos or neo address
+    SOURCE - glass or sense, etc
+    origination - facebook, reddit, github, etc
+    valid - true or false
+
+  The Attribution contract should allow 'invalidating' or revoking data
+  but only if called via ShiftData - that way it can also pass along to 
+  the SOURCE to tell them the user wants to invalidate the data. This
+  means that we can comply with the EU legal requirement for the 'Right
+  to be forgotten', as well as any other provences or regions that 
+  require this legally.
+
+
+## Versions
+  
+  v1.1 capitalized source, target and requestor for ease of reading
+       and disambiguation. Included nonce/epochtime inside datagram.
+       Renamed datashift to shiftdata to reduce ambiguity with the
+       datasift brand/domain :)     
+  v1 Initial RFD for ShiftData
