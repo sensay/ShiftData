@@ -15,7 +15,7 @@ state: publish
 
   a TARGET initially uploads or informs a SOURCE about a skill or some information
   the SOURCE then publishes onto the relevant blockchains a data attribution packet *[1] *[2]
-  a REQUESTOR calls over to the datashift HTTP API and finds the TARGET's wallet
+  a REQUESTOR looks at the blockchains events and finds the TARGET's wallet-id
     has more detailed information about 'ruby' in SENSE
   the REQUESTOR then calls the datashift HTTP API 'request-data' by sending in a
     request packet *[2] along with the payment of 1 SENSE token *[3]
@@ -38,6 +38,7 @@ state: publish
          epochtime in UTC - reduce replay attacks on endpoints (acting as a nonce)
          callback url
        Note that this entire request has been encrypted using REQUESTORs private pgp key
+       as well as providing the token supplied by /register-publickey.
 
   *[3] The SOURCE token cost can be set via the codebase running on elixir/erlang
        and then hot reloaded. Having this externally configurable could be an 
@@ -47,6 +48,20 @@ state: publish
        for SOURCES ? Eg; HTTP or via Contracts only ?
 
 
+## What does BDA _NOT_ seek to do
+
+   As much as it's important to state the aims of what we hope to 
+   accomplish, it's also important to say what the BDA ShiftData
+   will not do. It is considered outside the scope for the following;
+  
+   * attestation or conflict resolution - ShiftData treats any attribution
+        from an authorised SOURCE as being verified and validated. It is not
+        the BDA's place to grade or control data quality. This is the SOURCE
+        reason d'etre
+   * searching - ShiftData does not seek to control how the events in the
+        blockchain are searched, nor in how they are ranked or ordered. 
+        
+        
 ## Payment of Source and Target
 
   ShiftData SOURCES will have to provide some tokens to begin with on joining,
@@ -99,7 +114,8 @@ state: publish
 
   datahift responds to
   * /register-publickey - takes a REQUESTOR id and their public key,
-                          provides back an auth token for revoking later
+                          provides back an auth token for revoking later or for
+                          using /request-data
   * /deregister-publickey - takes a REQUESTOR id and the revoking auth token
                             once this command is processed, the REQUESTOR id is removed
                             and can be re-registered with a new publickey
@@ -123,6 +139,7 @@ state: publish
                  the datapacket using ShiftDatas public key. The
                  data is then sent back to the callback URL, 
                  effectively by-passing ShiftData for the return.
+
 
 ## Data Markup
 
@@ -173,6 +190,10 @@ state: publish
 
 ## Versions
   
+  v1.2 clarified token from /register-publickey is used during any
+       calls to /request-data. noted that 'search' can be performed
+       on the event logs inside blockchains from SOURCE attributions.
+       specify what BDA does not do.
   v1.1 capitalized source, target and requestor for ease of reading
        and disambiguation. Included nonce/epochtime inside datagram.
        Renamed datashift to shiftdata to reduce ambiguity with the
